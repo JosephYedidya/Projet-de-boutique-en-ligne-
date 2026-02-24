@@ -1,22 +1,117 @@
 /**
  * Main Application Logic
  * Handles all e-commerce functionality
+ * Now with database integration for real-time stock status
  */
+
 // ===== STATE =====
+// Note: productsData will be set from products.js or loaded via API
+// Declare it here so it can be referenced
+let productsData = [];
 let cart = JSON.parse(localStorage.getItem('cart')) || [];
 let wishlist = JSON.parse(localStorage.getItem('wishlist')) || [];
 let comparison = JSON.parse(localStorage.getItem('comparison')) || [];
 let currentFilter = 'all';
 let searchQuery = '';
+let isUsingAPI = false; // Track if we're using API data
 
-// ===== INITIALIZATION =====
+// Category labels - fallback in case products.js hasn't loaded yet
+const categoryLabels = {
+  tech: 'Tech & Gadgets',
+  beauty: 'Beauté & Soins',
+  goods: 'Maison & Décoration',
+  fashion: 'Mode & Vêtements',
+  accessories: 'Accessoires'
+};
+
+// ===== API CONFIG =====
+const API_URL = './api.php';
+
+// ===== INITIALIZE ON LOAD =====
+async function initializeApp() {
+  console.log('🚀 Initializing app...');
+  
+  // PRIORITY 1: Try to load from API (database) first
+  console.log('📡 Attempting to load products from database API...');
+  try {
+    const response = await fetch(`${API_URL}?action=getProducts`);
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success && result.data && result.data.length > 0) {
+        productsData = result.data;
+        isUsingAPI = true;
+        console.log('✅ Products loaded from DATABASE API, count:', productsData.length);
+        
+        // Cache for offline use
+        localStorage.setItem('cachedProducts', JSON.stringify(productsData));
+        
+        renderProducts();
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn('⚠️ API not available:', e.message);
+  }
+  
+  // PRIORITY 2: Try to get from window.productsDataStatic (products.js)
+  if (typeof window.productsDataStatic !== 'undefined' && window.productsDataStatic && window.productsDataStatic.length > 0) {
+    productsData = window.productsDataStatic;
+    isUsingAPI = false;
+    console.log('✅ Products loaded from products.js (fallback), count:', productsData.length);
+    renderProducts();
+    return;
+  }
+  
+  // PRIORITY 3: Try window.productsData (alternative)
+  if (typeof window.productsData !== 'undefined' && window.productsData && window.productsData.length > 0) {
+    productsData = window.productsData;
+    isUsingAPI = false;
+    console.log('✅ Products loaded from window.productsData (fallback), count:', productsData.length);
+    renderProducts();
+    return;
+  }
+  
+  // PRIORITY 4: Try localStorage cache
+  const cachedProducts = localStorage.getItem('cachedProducts');
+  if (cachedProducts) {
+    try {
+      productsData = JSON.parse(cachedProducts);
+      isUsingAPI = false;
+      console.log('✅ Products loaded from cache (fallback), count:', productsData.length);
+      renderProducts();
+      return;
+    } catch (e) {
+      console.warn('Cache parse error:', e);
+    }
+  }
+  
+  // PRIORITY 5: Try direct productsData variable
+  if (typeof productsData !== 'undefined' && productsData && productsData.length > 0) {
+    isUsingAPI = false;
+    console.log('✅ Products loaded from variable, count:', productsData.length);
+    renderProducts();
+    return;
+  }
+  
+  // Final fallback - render empty message
+  console.log('❌ No products found anywhere');
+  const grid = document.getElementById('productsGrid');
+  if (grid) grid.innerHTML = '<p style="text-align:center;padding:20px;">Aucun produit disponible. Veuillez vérifier la connexion à la base de données.</p>';
+}
+
+// Run initialization immediately when script loads
+// Also wait for DOMContentLoaded
 document.addEventListener('DOMContentLoaded', () => {
-  renderProducts();
+  // Try immediately
+  initializeApp();
+  
+  // Then set up other features
   updateCartBadge();
   updateWishlistCount();
   updateComparisonBar();
   setupEventListeners();
   setupMobileNav();
+  initializeNewFeatures();
 
   // Show promo banner after delay (only on weekends)
   if (!sessionStorage.getItem('promoShown') && isWeekend()) {
@@ -25,13 +120,181 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 3000);
   }
 
-  // Show bottom overlay after delay (example)
+  // Show bottom overlay after delay
   if (!sessionStorage.getItem('bottomOverlayShown')) {
     setTimeout(() => {
       showBottomOverlay();
-    }, 5000); // Show after 5 seconds
+    }, 5000);
   }
 });
+
+// Listen for products loaded event from products.js
+window.addEventListener('productsLoaded', () => {
+  console.log('📦 ProductsLoaded event received');
+  if (productsData.length === 0 && window.productsDataStatic) {
+    productsData = window.productsDataStatic;
+  }
+  if (productsData.length > 0) {
+    renderProducts();
+  }
+});
+
+// Also try to render on window load as a safety measure
+window.addEventListener('load', () => {
+  const grid = document.getElementById('productsGrid');
+  if (!grid || grid.innerHTML.trim() === '') {
+    console.log('⚠️ Products grid empty on window load, retrying...');
+    initializeApp();
+  }
+});
+
+// ===== API FUNCTIONS =====
+async function loadProductsFromAPI() {
+  let apiLoaded = false;
+  
+  try {
+    const response = await fetch(`${API_URL}?action=getProducts`);
+    if (!response.ok) throw new Error('API request failed');
+    
+    const result = await response.json();
+    
+    if (result.success && result.data && result.data.length > 0) {
+      productsData = result.data;
+      isUsingAPI = true;
+      apiLoaded = true;
+      console.log('✅ Products loaded from database');
+      
+      // Update inStock based on stock quantity
+      productsData.forEach(product => {
+        product.inStock = product.stock > 0;
+      });
+      return;
+    }
+  } catch (error) {
+    console.warn('⚠️ API not available:', error.message);
+  }
+  
+  // Fallback: try to get from window.productsDataStatic
+  if (!apiLoaded && typeof window.productsDataStatic !== 'undefined' && window.productsDataStatic.length > 0) {
+    productsData = window.productsDataStatic;
+    isUsingAPI = false;
+    console.log('✅ Products loaded from static data (products.js)');
+    return;
+  }
+  
+  // Fallback: check if productsData was loaded from products.js directly
+  if (!apiLoaded && typeof productsData !== 'undefined' && productsData.length > 0) {
+    isUsingAPI = false;
+    console.log('✅ Products already loaded from products.js');
+    return;
+  }
+  
+  // Fallback: try localStorage cache
+  if (!apiLoaded) {
+    const cachedProducts = localStorage.getItem('cachedProducts');
+    if (cachedProducts) {
+      try {
+        productsData = JSON.parse(cachedProducts);
+        isUsingAPI = false;
+        console.log('✅ Products loaded from cache');
+        return;
+      } catch (e) {}
+    }
+  }
+  
+  // Last resort: retry API after delay
+  if (!apiLoaded) {
+    console.warn('⚠️ Retrying API in 2 seconds...');
+    setTimeout(async () => {
+      try {
+        const response = await fetch(`${API_URL}?action=getProducts`);
+        const result = await response.json();
+        if (result.success && result.data && result.data.length > 0) {
+          productsData = result.data;
+          isUsingAPI = true;
+          localStorage.setItem('cachedProducts', JSON.stringify(productsData));
+          renderProducts();
+          console.log('✅ Products loaded after retry');
+        }
+      } catch (e) {
+        console.error('Retry failed:', e);
+      }
+    }, 2000);
+  }
+}
+
+async function fetchProductStock(productId) {
+  if (!isUsingAPI) return null;
+  
+  try {
+    const response = await fetch(`${API_URL}?action=getProduct&id=${productId}`);
+    const result = await response.json();
+    
+    if (result.success && result.data) {
+      return {
+        stock: result.data.stock,
+        inStock: result.data.in_stock > 0
+      };
+    }
+  } catch (error) {
+    console.error('Error fetching stock:', error);
+  }
+  
+  return null;
+}
+
+async function updateProductStock(productId, newStock) {
+  if (!isUsingAPI) {
+    showToast('❌ Cannot update stock: Database not connected', 'error');
+    return false;
+  }
+  
+  try {
+    const response = await fetch(`${API_URL}?action=updateStock`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        id: productId,
+        stock: newStock
+      })
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      // Update local data
+      const product = productsData.find(p => p.id === productId);
+      if (product) {
+        product.stock = newStock;
+        product.inStock = newStock > 0;
+      }
+      return true;
+    }
+  } catch (error) {
+    console.error('Error updating stock:', error);
+  }
+  
+  return false;
+}
+
+async function getStats() {
+  if (!isUsingAPI) return null;
+  
+  try {
+    const response = await fetch(`${API_URL}?action=getStats`);
+    const result = await response.json();
+    
+    if (result.success) {
+      return result.data;
+    }
+  } catch (error) {
+    console.error('Error fetching stats:', error);
+  }
+  
+  return null;
+}
 
 // ===== EVENT LISTENERS =====
 function setupEventListeners() {
@@ -52,6 +315,27 @@ function setupEventListeners() {
       renderProducts();
     });
   }
+
+  // Keyboard shortcut for search (Ctrl+K or Cmd+K)
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      e.preventDefault();
+      const searchBar = document.getElementById('searchBar');
+      if (searchBar) {
+        searchBar.focus();
+        searchBar.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+    // Also support '/' key for quick search
+    if (e.key === '/' && !isInputFocused()) {
+      e.preventDefault();
+      const searchBar = document.getElementById('searchBar');
+      if (searchBar) {
+        searchBar.focus();
+        searchBar.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  });
 
   // Filter buttons
   document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -103,9 +387,16 @@ function renderProducts() {
   const grid = document.getElementById('productsGrid');
   const noResults = document.getElementById('noResults');
   
+  // Map API field names to expected field names
+  productsData = productsData.map(p => ({
+    ...p,
+    desc: p.desc || p.description || '', // Handle both 'desc' and 'description' fields
+    oldPrice: p.oldPrice || p.old_price || null
+  }));
+  
   const filtered = productsData.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery) || 
-                         p.desc.toLowerCase().includes(searchQuery);
+                         (p.desc || '').toLowerCase().includes(searchQuery);
     const matchesFilter = currentFilter === 'all' || p.category === currentFilter;
     return matchesSearch && matchesFilter;
   });
@@ -117,27 +408,43 @@ function renderProducts() {
   }
 
   noResults.style.display = 'none';
-  grid.innerHTML = filtered.map(p => `
+  grid.innerHTML = filtered.map(p => {
+    // Ensure we have the correct field values
+    const desc = p.desc || p.description || '';
+    const oldPrice = p.oldPrice || p.old_price || null;
+    const inStock = p.inStock !== undefined ? p.inStock : (p.stock > 0);
+    const rating = p.rating || 0;
+    const stock = p.stock || 0;
+    
+    return `
     <article class="product" data-id="${p.id}" data-category="${p.category}">
-      <div class="product-rating">${'⭐'.repeat(p.rating)}${'☆'.repeat(5-p.rating)}</div>
+      <div class="product-rating">${'⭐'.repeat(Math.round(rating))}${'☆'.repeat(5-Math.round(rating))}</div>
       ${p.badge ? `<div class="product-badge">${p.badge}</div>` : ''}
+      ${!inStock ? `<div class="product-badge out-of-stock-badge">❌ Rupture de stock</div>` : ''}
       <button class="wishlist-btn ${isInWishlist(p.id) ? 'active' : ''}" 
               onclick="toggleWishlist(${p.id})"
               aria-label="${isInWishlist(p.id) ? 'Retirer des favoris' : 'Ajouter aux favoris'}">
         ${isInWishlist(p.id) ? '❤️' : '🤍'}
       </button>
       <div class="product-image">
-        <img src="${p.image}" alt="${p.name}" loading="lazy">
+        <img src="${p.image}" alt="${p.name}" loading="lazy" ${!inStock ? 'style="opacity:0.5"' : ''}>
       </div>
       <h3>${p.name}</h3>
-      <p class="product-desc">${p.desc}</p>
+      <p class="product-desc">${desc}</p>
       <div class="product-footer">
         <div class="product-footer-top">
           <p class="price">${formatPrice(p.price)}</p>
+          <span class="category-label">${categoryLabels[p.category] || p.category}</span>
+        </div>
+        <div class="stock-info ${inStock ? 'in-stock' : 'out-of-stock'}">
+          ${inStock ? `📦 ${stock} en stock` : '❌ Indisponible'}
         </div>
         <div class="product-actions">
-          <button class="add-cart-btn" id="addBtn-${p.id}" onclick="addToCart(${p.id}, this)">
-            🛒 Ajouter
+          <button class="add-cart-btn ${!inStock ? 'disabled' : ''}" 
+                  id="addBtn-${p.id}" 
+                  onclick="${inStock ? `addToCart(${p.id}, this)` : ''}"
+                  ${!inStock ? 'disabled' : ''}>
+            ${inStock ? '🛒 Ajouter' : '❌ Indisponible'}
           </button>
           <button class="compare-btn-small ${isInComparison(p.id) ? 'active' : ''}" 
                   onclick="toggleComparison(${p.id})" 
@@ -148,7 +455,8 @@ function renderProducts() {
         </div>
       </div>
     </article>
-  `).join('');
+  `;
+  }).join('');
 }
 
 // ===== UTILITY FUNCTIONS =====
@@ -160,6 +468,14 @@ function sanitizeInput(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+function isInputFocused() {
+  const activeElement = document.activeElement;
+  return activeElement.tagName === 'INPUT' || 
+         activeElement.tagName === 'TEXTAREA' || 
+         activeElement.tagName === 'SELECT' ||
+         activeElement.isContentEditable;
 }
 
 function isWeekend() {
@@ -487,10 +803,21 @@ function renderComparison() {
 }
 
 // ===== FILTER BY CATEGORY =====
-function filterByCategory(category) {
+function filterByCategory(category, navItem = null) {
+  // Update filter buttons
   document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
   const btn = document.querySelector(`[data-filter="${category}"]`);
   if (btn) btn.classList.add('active');
+  
+  // Update category navbar items
+  document.querySelectorAll('.category-nav-item').forEach(item => item.classList.remove('active'));
+  if (navItem) {
+    navItem.classList.add('active');
+  } else {
+    const navItemElement = document.querySelector(`.category-nav-item[data-category="${category}"]`);
+    if (navItemElement) navItemElement.classList.add('active');
+  }
+  
   currentFilter = category;
   renderProducts();
   document.getElementById('produits').scrollIntoView({ behavior: 'smooth' });
@@ -987,3 +1314,827 @@ function scrollToTop() {
     });
   }
 }
+
+// ===== USER AUTHENTICATION =====
+let currentUser = JSON.parse(localStorage.getItem('currentUser')) || null;
+let users = JSON.parse(localStorage.getItem('users')) || [];
+
+function isLoggedIn() {
+  return currentUser !== null;
+}
+
+function register(name, email, password, phone) {
+  // Check if email already exists
+  if (users.find(u => u.email === email)) {
+    return { success: false, message: 'Cet email est déjà utilisé' };
+  }
+  
+  // Create new user
+  const newUser = {
+    id: Date.now(),
+    name: name,
+    email: email,
+    password: password, // In real app, hash this!
+    phone: phone,
+    addresses: [],
+    createdAt: new Date().toISOString()
+  };
+  
+  users.push(newUser);
+  localStorage.setItem('users', JSON.stringify(users));
+  
+  // Auto login
+  currentUser = newUser;
+  delete currentUser.password;
+  localStorage.setItem('currentUser', JSON.stringify(currentUser));
+  
+  return { success: true, message: 'Compte créé avec succès!' };
+}
+
+function login(email, password) {
+  const user = users.find(u => u.email === email && u.password === password);
+  
+  if (!user) {
+    return { success: false, message: 'Email ou mot de passe incorrect' };
+  }
+  
+  currentUser = { ...user };
+  delete currentUser.password;
+  localStorage.setItem('currentUser', JSON.stringify(currentUser));
+  
+  return { success: true, message: 'Connexion réussie!' };
+}
+
+function logout() {
+  currentUser = null;
+  localStorage.removeItem('currentUser');
+  showToast('👋 Déconnexion réussie', 'success');
+  updateUserUI();
+}
+
+function updateUserProfile(updates) {
+  if (!currentUser) return { success: false, message: 'Vous devez être connecté' };
+  
+  // Update user in users array
+  const userIndex = users.findIndex(u => u.id === currentUser.id);
+  if (userIndex !== -1) {
+    users[userIndex] = { ...users[userIndex], ...updates };
+    localStorage.setItem('users', JSON.stringify(users));
+    
+    // Update current user
+    currentUser = { ...currentUser, ...updates };
+    delete currentUser.password;
+    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    
+    return { success: true, message: 'Profil mis à jour!' };
+  }
+  
+  return { success: false, message: 'Erreur lors de la mise à jour' };
+}
+
+function updateUserUI() {
+  const userBtn = document.getElementById('userBtn');
+  const mobileUserBtn = document.getElementById('mobileUserBtn');
+  
+  if (isLoggedIn()) {
+    const userIcon = '👤';
+    if (userBtn) {
+      userBtn.innerHTML = `${userIcon} ${currentUser.name.split(' ')[0]}`;
+      userBtn.onclick = openProfile;
+    }
+    if (mobileUserBtn) {
+      mobileUserBtn.innerHTML = `👤 ${currentUser.name}`;
+      mobileUserBtn.onclick = () => { openProfile(); closeMobileNav(); };
+    }
+  } else {
+    if (userBtn) {
+      userBtn.innerHTML = '👤 Connexion';
+      userBtn.onclick = openLoginModal;
+    }
+    if (mobileUserBtn) {
+      mobileUserBtn.innerHTML = '👤 Connexion';
+      mobileUserBtn.onclick = () => { openLoginModal(); closeMobileNav(); };
+    }
+  }
+}
+
+function openLoginModal() {
+  document.getElementById('loginModal').classList.add('active');
+  document.body.style.overflow = 'hidden';
+  closeMobileNav();
+}
+
+function closeLoginModal() {
+  document.getElementById('loginModal').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function openRegisterModal() {
+  closeLoginModal();
+  document.getElementById('registerModal').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeRegisterModal() {
+  document.getElementById('registerModal').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function openProfile() {
+  if (!isLoggedIn()) {
+    openLoginModal();
+    return;
+  }
+  document.getElementById('profileModal').classList.add('active');
+  document.body.style.overflow = 'hidden';
+  renderProfile();
+}
+
+function closeProfile() {
+  document.getElementById('profileModal').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function renderProfile() {
+  const container = document.getElementById('profileContent');
+  if (!container) return;
+  
+  container.innerHTML = `
+    <div class="profile-header">
+      <div class="profile-avatar">${currentUser.name.charAt(0).toUpperCase()}</div>
+      <div class="profile-info">
+        <h3>${sanitizeInput(currentUser.name)}</h3>
+        <p>${sanitizeInput(currentUser.email)}</p>
+        <p>${currentUser.phone || 'Pas de téléphone'}</p>
+      </div>
+    </div>
+    <div class="profile-menu">
+      <button class="profile-menu-item" onclick="openOrders()">
+        📦 Mes commandes
+      </button>
+      <button class="profile-menu-item" onclick="openAddresses()">
+        📍 Mes adresses
+      </button>
+      <button class="profile-menu-item" onclick="openEditProfile()">
+        ✏️ Modifier le profil
+      </button>
+      <button class="profile-menu-item logout" onclick="logout()">
+        🚪 Déconnexion
+      </button>
+    </div>
+  `;
+}
+
+function handleLoginSubmit(e) {
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  
+  const result = login(email, password);
+  
+  if (result.success) {
+    showToast(result.message, 'success');
+    closeLoginModal();
+    updateUserUI();
+  } else {
+    showToast(result.message, 'error');
+  }
+}
+
+function handleRegisterSubmit(e) {
+  e.preventDefault();
+  const name = document.getElementById('registerName').value.trim();
+  const email = document.getElementById('registerEmail').value.trim();
+  const password = document.getElementById('registerPassword').value;
+  const phone = document.getElementById('registerPhone').value.trim();
+  
+  if (password.length < 6) {
+    showToast('Le mot de passe doit contenir au moins 6 caractères', 'error');
+    return;
+  }
+  
+  const result = register(name, email, password, phone);
+  
+  if (result.success) {
+    showToast(result.message, 'success');
+    closeRegisterModal();
+    updateUserUI();
+  } else {
+    showToast(result.message, 'error');
+  }
+}
+
+// ===== ORDER HISTORY =====
+function openOrders() {
+  document.getElementById('profileModal').classList.remove('active');
+  document.getElementById('ordersModal').classList.add('active');
+  renderOrders();
+}
+
+function closeOrders() {
+  document.getElementById('ordersModal').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function renderOrders() {
+  const container = document.getElementById('ordersContent');
+  const orders = JSON.parse(localStorage.getItem('orders')) || [];
+  
+  if (orders.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div style="font-size: 50px; opacity: 0.3;">📦</div>
+        <p>Vous n'avez pas encore de commandes</p>
+        <button class="btn btn-primary" onclick="closeOrders(); document.getElementById('produits').scrollIntoView({behavior: 'smooth'})">
+          Découvrir les produits
+        </button>
+      </div>
+    `;
+    return;
+  }
+  
+  // Sort by date (newest first)
+  orders.sort((a, b) => new Date(b.date) - new Date(a.date));
+  
+  container.innerHTML = orders.map(order => `
+    <div class="order-card">
+      <div class="order-header">
+        <div class="order-id">Commande #${order.id}</div>
+        <div class="order-status status-${order.status}">${getStatusLabel(order.status)}</div>
+      </div>
+      <div class="order-date">${formatDate(order.date)}</div>
+      <div class="order-items">
+        ${order.items.map(item => `
+          <div class="order-item">
+            <img src="${item.image}" alt="${sanitizeInput(item.name)}">
+            <div>
+              <p>${sanitizeInput(item.name)}</p>
+              <p class="order-item-qty">Qty: ${item.quantity}</p>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div class="order-footer">
+        <div class="order-total">
+          <span>Total:</span>
+          <strong>${formatPrice(order.total)}</strong>
+        </div>
+        <button class="btn btn-outline" onclick="trackOrder(${order.id})">
+          📍 Suivre
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function getStatusLabel(status) {
+  const labels = {
+    'confirmed': 'Confirmée',
+    'processing': 'En cours',
+    'shipped': 'Expédiée',
+    'delivered': 'Livrée',
+    'cancelled': 'Annulée'
+  };
+  return labels[status] || status;
+}
+
+function formatDate(dateString) {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('fr-FR', { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function trackOrder(orderId) {
+  const orders = JSON.parse(localStorage.getItem('orders')) || [];
+  const order = orders.find(o => o.id === orderId);
+  
+  if (order) {
+    showToast(`📦 Commande #${orderId} - Status: ${getStatusLabel(order.status)}`, 'info');
+  }
+}
+
+// ===== RECENTLY VIEWED =====
+let recentlyViewed = JSON.parse(localStorage.getItem('recentlyViewed')) || [];
+
+function addToRecentlyViewed(productId) {
+  // Remove if already exists
+  recentlyViewed = recentlyViewed.filter(id => id !== productId);
+  // Add to beginning
+  recentlyViewed.unshift(productId);
+  // Keep only last 10
+  recentlyViewed = recentlyViewed.slice(0, 10);
+  localStorage.setItem('recentlyViewed', JSON.stringify(recentlyViewed));
+}
+
+function getRecentlyViewedProducts() {
+  return recentlyViewed.map(id => productsData.find(p => p.id === id)).filter(p => p !== undefined);
+}
+
+function renderRecentlyViewed() {
+  const container = document.getElementById('recentlyViewedContainer');
+  if (!container) return;
+  
+  const products = getRecentlyViewedProducts();
+  
+  if (products.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+  
+  container.style.display = 'block';
+  container.innerHTML = `
+    <div class="section-header">
+      <h2 class="section-title">👁️ Vus Récemment</h2>
+    </div>
+    <div class="products recently-viewed-grid">
+      ${products.map(p => `
+        <article class="product" data-id="${p.id}">
+          <div class="product-image">
+            <img src="${p.image}" alt="${p.name}" loading="lazy">
+          </div>
+          <h3>${p.name}</h3>
+          <p class="price">${formatPrice(p.price)}</p>
+        </article>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ===== COUPON SYSTEM =====
+let appliedCoupon = null;
+
+function applyCoupon(code) {
+  const coupon = couponCodes.find(c => c.code.toUpperCase() === code.toUpperCase());
+  
+  if (!coupon) {
+    return { success: false, message: 'Code promo invalide' };
+  }
+  
+  const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  
+  if (subtotal < coupon.minOrder) {
+    return { success: false, message: `Montant minimum: ${formatPrice(coupon.minOrder)}` };
+  }
+  
+  appliedCoupon = coupon;
+  return { success: true, message: `Code promo appliqué: ${coupon.description}` };
+}
+
+function removeCoupon() {
+  appliedCoupon = null;
+  showToast('Code promo supprimé', 'info');
+}
+
+function calculateDiscount(subtotal) {
+  if (!appliedCoupon) return 0;
+  
+  if (appliedCoupon.type === 'percent') {
+    return Math.floor(subtotal * (appliedCoupon.discount / 100));
+  } else {
+    return appliedCoupon.discount;
+  }
+}
+
+function renderCouponInput() {
+  const container = document.getElementById('couponContainer');
+  if (!container) return;
+  
+  if (appliedCoupon) {
+    container.innerHTML = `
+      <div class="applied-coupon">
+        <span>🏷️ ${appliedCoupon.code}</span>
+        <button onclick="removeCoupon()">✕</button>
+      </div>
+    `;
+  } else {
+    container.innerHTML = `
+      <div class="coupon-input">
+        <input type="text" id="couponCode" placeholder="Code promo">
+        <button class="btn btn-outline" onclick="handleCouponApply()">Appliquer</button>
+      </div>
+    `;
+  }
+}
+
+function handleCouponApply() {
+  const code = document.getElementById('couponCode').value.trim();
+  if (!code) {
+    showToast('Veuillez entrer un code promo', 'error');
+    return;
+  }
+  
+  const result = applyCoupon(code);
+  showToast(result.message, result.success ? 'success' : 'error');
+  
+  if (result.success) {
+    renderCouponInput();
+    renderCart();
+  }
+}
+
+// ===== PRICE FILTER & SORT =====
+let priceRange = { min: 0, max: 1000000 };
+let sortBy = 'default';
+
+function filterByPrice(min, max) {
+  priceRange = { min, max };
+  renderProducts();
+}
+
+function sortProducts(products) {
+  switch (sortBy) {
+    case 'price-asc':
+      return [...products].sort((a, b) => a.price - b.price);
+    case 'price-desc':
+      return [...products].sort((a, b) => b.price - a.price);
+    case 'rating':
+      return [...products].sort((a, b) => b.rating - a.rating);
+    case 'newest':
+      return [...products].sort((a, b) => (b.isNew ? 1 : 0) - (a.isNew ? 1 : 0));
+    default:
+      return products;
+  }
+}
+
+function changeSort(sort) {
+  sortBy = sort;
+  renderProducts();
+}
+
+// ===== PRODUCT QUICK VIEW =====
+function openQuickView(productId) {
+  const product = productsData.find(p => p.id === productId);
+  if (!product) return;
+  
+  // Add to recently viewed
+  addToRecentlyViewed(productId);
+  
+  const container = document.getElementById('quickViewContent');
+  container.innerHTML = `
+    <div class="quick-view-grid">
+      <div class="quick-view-images">
+        <img src="${product.image}" alt="${product.name}" id="quickViewMainImage">
+        ${product.images && product.images.length > 1 ? `
+          <div class="quick-view-thumbnails">
+            ${product.images.map((img, i) => `
+              <img src="${img}" alt="${product.name}" onclick="changeQuickViewImage('${img}')" class="${i === 0 ? 'active' : ''}">
+            `).join('')}
+          </div>
+        ` : ''}
+      </div>
+      <div class="quick-view-info">
+        <h2>${product.name}</h2>
+        <div class="quick-view-rating">
+          ${'⭐'.repeat(product.rating)}${'☆'.repeat(5-product.rating)}
+          <span>(${product.reviewCount || 0} avis)</span>
+        </div>
+        <div class="quick-view-price">
+          ${product.oldPrice ? `<span class="old-price">${formatPrice(product.oldPrice)}</span>` : ''}
+          <span class="current-price">${formatPrice(product.price)}</span>
+        </div>
+        <p class="quick-view-desc">${product.desc}</p>
+        
+        ${product.colors && product.colors.length > 0 ? `
+          <div class="quick-view-colors">
+            <label>Couleur:</label>
+            <div class="color-options">
+              ${product.colors.map((color, i) => `
+                <button class="color-btn ${i === 0 ? 'active' : ''}" onclick="selectColor(this)">${color}</button>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+        
+        ${product.variants && product.variants.length > 0 ? `
+          <div class="quick-view-variants">
+            <label>Variante:</label>
+            <div class="variant-options">
+              ${product.variants.map((variant, i) => `
+                <button class="variant-btn ${i === 0 ? 'active' : ''}" onclick="selectVariant(this, ${variant.price})">
+                  ${variant.name}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+        
+        <div class="quick-view-stock">
+          ${product.inStock ? `
+            <span class="in-stock">✅ En stock (${product.stock} disponibles)</span>
+          ` : `
+            <span class="out-of-stock">❌ Rupture de stock</span>
+          `}
+        </div>
+        
+        <div class="quick-view-actions">
+          <div class="qty-selector">
+            <button onclick="quickViewQty(-1)">−</button>
+            <input type="number" id="quickViewQty" value="1" min="1" max="${product.stock || 1}">
+            <button onclick="quickViewQty(1)">+</button>
+          </div>
+          <button class="btn btn-primary" onclick="addToCartFromQuickView(${product.id})">
+            🛒 Ajouter au panier
+          </button>
+        </div>
+        
+        <div class="quick-view-shipping">
+          ${product.freeShipping ? `
+            <p>🚚 Livraison gratuite</p>
+          ` : `
+            <p>📦 Frais de livraison: ${formatPrice(standardShippingCost)}</p>
+          `}
+        </div>
+      </div>
+    </div>
+    
+    <div class="quick-view-tabs">
+      <button class="tab-btn active" onclick="switchQuickViewTab('specs')">Spécifications</button>
+      <button class="tab-btn" onclick="switchQuickViewTab('reviews')">Avis</button>
+    </div>
+    
+    <div id="quickViewTabContent">
+      <div class="specs-content">
+        <table class="specs-table">
+          ${Object.entries(product.specs || {}).map(([key, value]) => `
+            <tr>
+              <td>${key}</td>
+              <td>${value}</td>
+            </tr>
+          `).join('')}
+        </table>
+      </div>
+    </div>
+  `;
+  
+  document.getElementById('quickViewModal').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeQuickView() {
+  document.getElementById('quickViewModal').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function changeQuickViewImage(src) {
+  document.getElementById('quickViewMainImage').src = src;
+}
+
+function selectColor(btn) {
+  document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function selectVariant(btn, price) {
+  document.querySelectorAll('.variant-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function quickViewQty(delta) {
+  const input = document.getElementById('quickViewQty');
+  let value = parseInt(input.value) + delta;
+  value = Math.max(1, Math.min(value, parseInt(input.max)));
+  input.value = value;
+}
+
+function addToCartFromQuickView(productId) {
+  const qty = parseInt(document.getElementById('quickViewQty').value) || 1;
+  const product = productsData.find(p => p.id === productId);
+  
+  for (let i = 0; i < qty; i++) {
+    addToCart(productId, null);
+  }
+  
+  closeQuickView();
+  openCart();
+}
+
+function switchQuickViewTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  
+  // For now just show specs again - reviews would need more implementation
+}
+
+// ===== RELATED PRODUCTS =====
+function getRelatedProducts(productId, category, limit = 4) {
+  return productsData
+    .filter(p => p.category === category && p.id !== productId)
+    .slice(0, limit);
+}
+
+function renderRelatedProducts(productId, category) {
+  const container = document.getElementById('relatedProductsContainer');
+  if (!container) return;
+  
+  const related = getRelatedProducts(productId, category);
+  
+  if (related.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+  
+  container.style.display = 'block';
+  container.innerHTML = `
+    <div class="section-header">
+      <h2 class="section-title">Produits Similaires</h2>
+    </div>
+    <div class="products">
+      ${related.map(p => `
+        <article class="product" data-id="${p.id}">
+          <div class="product-rating">${'⭐'.repeat(p.rating)}${'☆'.repeat(5-p.rating)}</div>
+          ${p.badge ? `<div class="product-badge">${p.badge}</div>` : ''}
+          <div class="product-image">
+            <img src="${p.image}" alt="${p.name}" loading="lazy">
+          </div>
+          <h3>${p.name}</h3>
+          <p class="product-desc">${p.desc}</p>
+          <div class="product-footer">
+            <div class="product-footer-top">
+              <p class="price">${formatPrice(p.price)}</p>
+            </div>
+            <div class="product-actions">
+              <button class="add-cart-btn" onclick="addToCart(${p.id}, this)">🛒 Ajouter</button>
+            </div>
+          </div>
+        </article>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ===== CURRENCY CONVERTER =====
+let currentCurrency = localStorage.getItem('currency') || 'XAF';
+
+function convertPrice(price, fromCurrency = 'XAF', toCurrency = currentCurrency) {
+  if (fromCurrency === toCurrency) return price;
+  
+  // Convert to XAF first, then to target currency
+  const priceInXAF = price / exchangeRates[fromCurrency];
+  return priceInXAF * exchangeRates[toCurrency];
+}
+
+function formatCurrency(price, currency = currentCurrency) {
+  const converted = convertPrice(price, 'XAF', currency);
+  const symbol = currencySymbols[currency];
+  
+  if (currency === 'XAF') {
+    return converted.toLocaleString('fr-FR') + ' ' + symbol;
+  } else {
+    return symbol + ' ' + converted.toFixed(2);
+  }
+}
+
+function changeCurrency(currency) {
+  currentCurrency = currency;
+  localStorage.setItem('currency', currency);
+  renderProducts();
+  renderCart();
+  showToast(`Devise changée: ${currency}`, 'success');
+}
+
+// ===== FREE SHIPPING CALCULATOR =====
+function getFreeShippingProgress() {
+  const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const remaining = freeShippingThreshold - subtotal;
+  
+  return {
+    subtotal,
+    threshold: freeShippingThreshold,
+    remaining: Math.max(0, remaining),
+    progress: Math.min(100, (subtotal / freeShippingThreshold) * 100),
+    eligible: subtotal >= freeShippingThreshold
+  };
+}
+
+function renderFreeShippingProgress() {
+  const container = document.getElementById('freeShippingProgress');
+  if (!container) return;
+  
+  const { subtotal, threshold, remaining, progress, eligible } = getFreeShippingProgress();
+  
+  if (eligible) {
+    container.innerHTML = `
+      <div class="free-shipping-eligible">
+        🚚 Livraison gratuite appliquée!
+      </div>
+    `;
+  } else {
+    container.innerHTML = `
+      <div class="free-shipping-progress">
+        <p>🚚 Ajoutez ${formatPrice(remaining)} pour la livraison gratuite!</p>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: ${progress}%"></div>
+        </div>
+        <small>${Math.round(progress)}% atteint</small>
+      </div>
+    `;
+  }
+}
+
+// ===== FAQ SECTION =====
+function renderFAQ() {
+  const container = document.getElementById('faqContainer');
+  if (!container || !faqData) return;
+  
+  container.innerHTML = faqData.map((item, index) => `
+    <div class="faq-item">
+      <button class="faq-question" onclick="toggleFAQ(${index})">
+        ${item.question}
+        <span class="faq-icon">+</span>
+      </button>
+      <div class="faq-answer" id="faq-${index}">
+        <p>${item.answer}</p>
+      </div>
+    </div>
+  `).join('');
+}
+
+function toggleFAQ(index) {
+  const answer = document.getElementById(`faq-${index}`);
+  const question = answer.previousElementSibling;
+  const icon = question.querySelector('.faq-icon');
+  
+  answer.classList.toggle('active');
+  icon.textContent = answer.classList.contains('active') ? '−' : '+';
+}
+
+// ===== NEWSLETTER =====
+function subscribeNewsletter(email) {
+  // In a real app, this would send to backend
+  const subscribers = JSON.parse(localStorage.getItem('newsletter')) || [];
+  
+  if (subscribers.includes(email)) {
+    return { success: false, message: 'Vous êtes déjà abonné!' };
+  }
+  
+  subscribers.push(email);
+  localStorage.setItem('newsletter', JSON.stringify(subscribers));
+  
+  return { success: true, message: 'Merci de votre inscription!' };
+}
+
+function handleNewsletterSubmit(e) {
+  e.preventDefault();
+  const email = document.getElementById('newsletterEmail').value.trim();
+  
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    showToast('Veuillez entrer un email valide', 'error');
+    return;
+  }
+  
+  const result = subscribeNewsletter(email);
+  showToast(result.message, result.success ? 'success' : 'error');
+  
+  if (result.success) {
+    document.getElementById('newsletterForm').reset();
+  }
+}
+
+// ===== SOCIAL SHARE =====
+function shareProduct(productName, productId) {
+  const url = window.location.href;
+  const text = `Découvrez ${productName} sur MultiShop!`;
+  
+  if (navigator.share) {
+    navigator.share({
+      title: productName,
+      text: text,
+      url: url
+    });
+  } else {
+    // Fallback: copy to clipboard
+    navigator.clipboard.writeText(`${text} ${url}`);
+    showToast('Lien copié dans le presse-papiers!', 'success');
+  }
+}
+
+// ===== INITIALIZE NEW FEATURES =====
+function initializeNewFeatures() {
+  // Update user UI
+  updateUserUI();
+  
+  // Render recently viewed
+  renderRecentlyViewed();
+  
+  // Render FAQ
+  renderFAQ();
+  
+  // Render free shipping progress
+  renderFreeShippingProgress();
+  
+  // Add event listeners for new modals
+  document.getElementById('loginForm')?.addEventListener('submit', handleLoginSubmit);
+  document.getElementById('registerForm')?.addEventListener('submit', handleRegisterSubmit);
+  document.getElementById('newsletterForm')?.addEventListener('submit', handleNewsletterSubmit);
+}
+
+// Add to initialization
+document.addEventListener('DOMContentLoaded', () => {
+  // ... existing code ...
+  initializeNewFeatures();
+});

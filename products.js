@@ -1,11 +1,12 @@
- /**
+/**
  * Product Data Module
  * Contains all product information for the e-commerce store
  * Tech, Beauty & Goods E-commerce
  * Enhanced with variants, reviews, stock status
  */
 
-const productsData = [
+// Make productsData available globally so app.js can access it
+window.productsData = window.productsData || [
     // TECH PRODUCTS
     {
       id: 1,

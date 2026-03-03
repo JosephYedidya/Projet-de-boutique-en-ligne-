@@ -5,7 +5,7 @@
  */
 
 // Database credentials - XAMPP default settings
-$servername = "localhost";
+$servername = "127.0.0.1";
 $username = "root";
 $password = "";
 $database = "hardware_ecommerce";

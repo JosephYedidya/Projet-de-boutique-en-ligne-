@@ -6,7 +6,7 @@
  */
 
 // Database configuration
-$host = 'localhost';
+$host = '127.0.0.1';
 $dbname = 'hardware_ecommerce';
 $username = 'root';
 $password = '';
@@ -320,7 +320,95 @@ switch ($action) {
         respond(true, 'Categories retrieved successfully', $categories);
         break;
         
+    case 'addCategory':
+        // Add new category
+        $data = json_decode(file_get_contents('php://input'), true);
+        
+        if (!isset($data['name']) || empty($data['name'])) {
+            respond(false, 'Category name is required');
+        }
+        
+        $name = trim($data['name']);
+        $nameEn = isset($data['name_en']) ? trim($data['name_en']) : strtolower(str_replace(' ', '_', $name));
+        $description = isset($data['description']) ? trim($data['description']) : '';
+        $image = isset($data['image']) ? trim($data['image']) : '';
+        
+        $stmt = $pdo->prepare("INSERT INTO categories (name, name_en, description, image) VALUES (?, ?, ?, ?)");
+        $stmt->execute([$name, $nameEn, $description, $image]);
+        
+        $categoryId = $pdo->lastInsertId();
+        respond(true, 'Category added successfully', ['id' => $categoryId, 'name' => $name]);
+        break;
+        
+case 'deleteCategory':
+        // Delete category
+        $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+        
+        if ($id <= 0) {
+            respond(false, 'Invalid category ID');
+        }
+        
+        // Check if category has products
+        $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM products WHERE category_id = ? OR category = ?");
+        $stmt->execute([$id, $id]);
+        $productCount = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+        
+        if ($productCount > 0) {
+            respond(false, 'Cannot delete category with existing products. Move or delete products first.');
+        }
+        
+        $stmt = $pdo->prepare("DELETE FROM categories WHERE id = ?");
+        $stmt->execute([$id]);
+        
+        respond(true, 'Category deleted successfully');
+        break;
+        
+    case 'reduceStock':
+        // Reduce stock when order is placed
+        $data = json_decode(file_get_contents('php://input'), true);
+        
+        if (!isset($data['items']) || !is_array($data['items'])) {
+            respond(false, 'Items array is required');
+        }
+        
+        $items = $data['items'];
+        $updatedProducts = [];
+        $errors = [];
+        
+        foreach ($items as $item) {
+            $productId = (int)$item['id'];
+            $quantity = (int)$item['quantity'];
+            
+            // Get current stock
+            $stmt = $pdo->prepare("SELECT stock FROM products WHERE id = ?");
+            $stmt->execute([$productId]);
+            $product = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$product) {
+                $errors[] = "Product ID $productId not found";
+                continue;
+            }
+            
+            $newStock = max(0, $product['stock'] - $quantity);
+            $inStock = $newStock > 0 ? 1 : 0;
+            
+            $stmt = $pdo->prepare("UPDATE products SET stock = ?, in_stock = ? WHERE id = ?");
+            $stmt->execute([$newStock, $inStock, $productId]);
+            
+            $updatedProducts[] = [
+                'id' => $productId,
+                'oldStock' => $product['stock'],
+                'newStock' => $newStock
+            ];
+        }
+        
+        respond(true, 'Stock reduced successfully', [
+            'updated' => $updatedProducts,
+            'errors' => $errors
+        ]);
+        break;
+        
     default:
-        respond(false, 'Invalid action. Available actions: getProducts, getProduct, updateStock, updateProduct, getStats, search, getCategories');
+        respond(false, 'Invalid action. Available actions: getProducts, getProduct, updateStock, updateProduct, getStats, search, getCategories, addCategory, deleteCategory, reduceStock');
 }
 

@@ -942,6 +942,69 @@ function closeRegisterModal() {
   document.body.style.overflow = '';
 }
 
+async function register(name, email, phone, password) {
+  try {
+    const response = await fetch(`${API_URL}?action=register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, phone, password })
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      return { success: true, message: 'Compte créé avec succès!', user: result.data };
+    } else {
+      return { success: false, message: result.message };
+    }
+  } catch (error) {
+    console.error('Registration error:', error);
+    // Fallback to localStorage if API fails
+    const users = JSON.parse(localStorage.getItem('users') || '[]');
+    
+    if (users.find(u => u.email === email)) {
+      return { success: false, message: 'Cet email est déjà utilisé' };
+    }
+    
+    const newUser = {
+      id: Date.now(),
+      name: name,
+      email: email,
+      phone: phone || '',
+      password: password,
+      createdAt: new Date().toISOString()
+    };
+    
+    users.push(newUser);
+    localStorage.setItem('users', JSON.stringify(users));
+    
+    return { success: true, message: 'Compte créé avec succès!', user: newUser };
+  }
+}
+
+async function handleRegisterSubmit(e) {
+  e.preventDefault();
+  const name = document.getElementById('registerName').value.trim();
+  const email = document.getElementById('registerEmail').value.trim();
+  const phone = document.getElementById('registerPhone').value.trim();
+  const password = document.getElementById('registerPassword').value;
+  
+  const result = await register(name, email, phone, password);
+  
+  if (result.success) {
+    showToast(result.message, 'success');
+    closeRegisterModal();
+    // Auto login after registration
+    const loginResult = await login(email, password);
+    if (loginResult.success) {
+      updateUserUI();
+    }
+    document.getElementById('registerForm').reset();
+  } else {
+    showToast(result.message, 'error');
+  }
+}
+
 function openProfile() {
   if (!isLoggedIn()) {
     openLoginModal();

@@ -10,6 +10,15 @@ let comparison = JSON.parse(localStorage.getItem('comparison')) || [];
 let currentFilter = 'all';
 let searchQuery = '';
 let isUsingAPI = false;
+let categoryLabels = {
+  all: 'Tous',
+  tech: 'Tech & Gadgets',
+  beauty: 'Beauté & Soins',
+  goods: 'Maison & Décoration',
+  fashion: 'Mode & Vêtements',
+  accessories: 'Accessoires'
+};
+let categoriesFromDB = [];
 
 // ===== API CONFIG =====
 const API_URL = './api.php';
@@ -19,9 +28,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   // First, try to use products directly from products.js if available
   if (typeof productsData !== 'undefined' && productsData.length > 0) {
     console.log('✅ Products loaded from products.js, count:', productsData.length);
+    extractCategories(); // Extract categories from static data
   } else if (typeof window.productsDataStatic !== 'undefined' && window.productsDataStatic.length > 0) {
     productsData = window.productsDataStatic;
     console.log('✅ Products loaded from window.productsDataStatic, count:', productsData.length);
+    extractCategories(); // Extract categories from static data
   } else {
     await loadProductsFromAPI();
   }
@@ -37,6 +48,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else if (typeof window.productsDataStatic !== 'undefined') {
         productsData = window.productsDataStatic;
         renderProducts();
+        extractCategories();
       } else {
         const grid = document.getElementById('productsGrid');
         if (grid) grid.innerHTML = '<p style="text-align:center;padding:20px;">Aucun produit disponible</p>';
@@ -58,6 +70,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       loadProductsFromAPI().then(() => {
         if (productsData && productsData.length > 0) {
           renderProducts();
+          extractCategories(); // Also refresh categories
         }
       });
     }
@@ -69,6 +82,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadProductsFromAPI();
     if (productsData && productsData.length > 0) {
       renderProducts();
+      extractCategories(); // Also refresh categories
     }
   });
 });
@@ -92,6 +106,9 @@ async function loadProductsFromAPI() {
       productsData.forEach(product => {
         product.inStock = product.stock > 0;
       });
+      
+      // Extract unique categories from products
+      extractCategories();
       return;
     }
   } catch (error) {
@@ -110,6 +127,73 @@ async function loadProductsFromAPI() {
     console.log('✅ Products already loaded from products.js');
     return;
   }
+}
+
+// Extract unique categories from products
+function extractCategories() {
+  if (!productsData || productsData.length === 0) return;
+  
+  const uniqueCategories = [...new Set(productsData.map(p => p.category))];
+  console.log('📂 Categories found:', uniqueCategories);
+  
+  // Update categoryLabels with any new categories from DB
+  uniqueCategories.forEach(cat => {
+    if (!categoryLabels[cat]) {
+      // Format category name (e.g., "sports" -> "Sports")
+      categoryLabels[cat] = cat.charAt(0).toUpperCase() + cat.slice(1);
+    }
+  });
+  
+  categoriesFromDB = uniqueCategories;
+  
+  // Render categories in the navbar
+  renderCategoryNav();
+}
+
+// Render category navigation dynamically
+function renderCategoryNav() {
+  const categoryNav = document.getElementById('categories');
+  if (!categoryNav) return;
+  
+  // Default categories with icons
+  const defaultCategories = [
+    { key: 'all', icon: '🏠', label: 'Tous' },
+    { key: 'tech', icon: '📱', label: 'Tech' },
+    { key: 'beauty', icon: '💄', label: 'Beauté' },
+    { key: 'goods', icon: '🏠', label: 'Maison' },
+    { key: 'fashion', icon: '👗', label: 'Mode' },
+    { key: 'accessories', icon: '⌚', label: 'Accessoires' }
+  ];
+  
+  let html = '';
+  
+  // Add default categories
+  defaultCategories.forEach(cat => {
+    const isActive = currentFilter === cat.key ? 'active' : '';
+    html += `
+      <a href="#produits" class="category-nav-item ${isActive}" data-category="${cat.key}" onclick="filterByCategory('${cat.key}', this)">
+        <span class="category-nav-icon">${cat.icon}</span>
+        <span class="category-nav-label">${cat.label}</span>
+      </a>
+    `;
+  });
+  
+  // Add any additional categories from database
+  const existingKeys = defaultCategories.map(c => c.key);
+  categoriesFromDB.forEach(cat => {
+    if (!existingKeys.includes(cat)) {
+      const label = categoryLabels[cat] || cat.charAt(0).toUpperCase() + cat.slice(1);
+      const isActive = currentFilter === cat ? 'active' : '';
+      html += `
+        <a href="#produits" class="category-nav-item ${isActive}" data-category="${cat}" onclick="filterByCategory('${cat}', this)">
+          <span class="category-nav-icon">📦</span>
+          <span class="category-nav-label">${label}</span>
+        </a>
+      `;
+    }
+  });
+  
+  categoryNav.innerHTML = html;
 }
 
 // ===== EVENT LISTENERS =====

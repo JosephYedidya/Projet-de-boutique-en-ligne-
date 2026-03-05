@@ -1247,3 +1247,126 @@ td.out-of-stock {
     padding: 20px;
   }
 }
+
+/* ===== CATEGORY GRID WITH COUNTERS ===== */
+.category-grid-section {
+  background: var(--bg-card);
+  border-radius: 20px;
+  padding: 28px;
+  box-shadow: var(--shadow-lg);
+  margin-bottom: 28px;
+  border: 1px solid var(--border-light);
+}
+
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.category-grid-card {
+  background: var(--bg-main);
+  border-radius: 16px;
+  padding: 20px;
+  text-align: center;
+  border: 2px solid var(--border-light);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.category-grid-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--primary), var(--secondary));
+  transform: scaleX(0);
+  transition: transform 0.3s ease;
+}
+
+.category-grid-card:hover {
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--primary);
+}
+
+.category-grid-card:hover::before {
+  transform: scaleX(1);
+}
+
+.category-grid-icon {
+  font-size: 36px;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.category-grid-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  line-height: 1.3;
+}
+
+.category-grid-count {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--primary);
+  line-height: 1;
+}
+
+.category-grid-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 4px;
+}
+
+.category-grid-card.add-new {
+  border-style: dashed;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 140px;
+}
+
+.category-grid-card.add-new:hover {
+  background: rgba(99, 102, 241, 0.05);
+  border-color: var(--primary);
+}
+
+.category-grid-card.add-new .category-grid-icon {
+  font-size: 32px;
+  opacity: 0.5;
+}
+
+@media (max-width: 600px) {
+  .category-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  
+  .category-grid-card {
+    padding: 16px;
+  }
+  
+  .category-grid-icon {
+    font-size: 28px;
+  }
+  
+  .category-grid-name {
+    font-size: 12px;
+  }
+  
+  .category-grid-count {
+    font-size: 22px;
+  }
+}

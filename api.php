@@ -256,43 +256,47 @@ switch ($action) {
     case 'getStats':
         // Get stock statistics for dashboard
         $stats = [];
-        
+
         // Total products
         $stmt = $pdo->query("SELECT COUNT(*) as total FROM products");
         $stats['totalProducts'] = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
-        
+
+        // Total stock (sum of all stock quantities)
+        $stmt = $pdo->query("SELECT SUM(stock) as total FROM products");
+        $stats['totalStock'] = intval($stmt->fetch(PDO::FETCH_ASSOC)['total'] ?: 0);
+
         // Total stock value
         $stmt = $pdo->query("SELECT SUM(price * stock) as total FROM products WHERE stock > 0");
-        $stats['totalStockValue'] = $stmt->fetch(PDO::FETCH_ASSOC)['total'] ?: 0;
-        
+        $stats['totalStockValue'] = intval($stmt->fetch(PDO::FETCH_ASSOC)['total'] ?: 0);
+
         // Out of stock count
         $stmt = $pdo->query("SELECT COUNT(*) as count FROM products WHERE stock = 0");
         $stats['outOfStock'] = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
-        
+
         // Low stock count (less than 10)
         $stmt = $pdo->query("SELECT COUNT(*) as count FROM products WHERE stock > 0 AND stock < 10");
         $stats['lowStock'] = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
-        
+
         // In stock count
         $stmt = $pdo->query("SELECT COUNT(*) as count FROM products WHERE stock > 0");
         $stats['inStock'] = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
-        
+
         // Category breakdown
         $stmt = $pdo->query("
-            SELECT category, COUNT(*) as count, SUM(stock) as totalStock 
-            FROM products 
+            SELECT category, COUNT(*) as count, SUM(stock) as totalStock
+            FROM products
             GROUP BY category
         ");
         $stats['byCategory'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
         // Top products by stock
         $stmt = $pdo->query("SELECT id, name, stock FROM products ORDER BY stock DESC LIMIT 5");
         $stats['topStock'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
         // Low stock products
         $stmt = $pdo->query("SELECT id, name, stock, category FROM products WHERE stock < 10 ORDER BY stock ASC LIMIT 10");
         $stats['lowStockProducts'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
         respond(true, 'Stats retrieved successfully', $stats);
         break;
         

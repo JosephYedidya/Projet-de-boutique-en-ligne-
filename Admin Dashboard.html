@@ -1,24 +1,76 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <title>Dashboard - Gestion des Produits</title>
-  <link rel="stylesheet" href="style_dashboard.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - Gestion de Boutique</title>
+  <link rel="stylesheet" href="./style_dashboard.css">
   <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet"/>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <button class="theme-toggle" onclick="toggleTheme()"><span id="themeIcon">🌙</span><span id="themeText">Mode Sombre</span></button>
-  <nav class="sidebar" aria-label="Sidebar menu">
+  <button class="theme-toggle" onclick="toggleTheme()"><span id="themeIcon">🌙</span><span id="themeText" style="margin-left: 8px;">Mode Sombre</span></button>
+<nav class="sidebar" aria-label="Sidebar menu">
     <h3>🛒 Mon Dashboard</h3>
     <button type="button" onclick="showAddProductForm()"><i class="bx bx-plus-circle"></i> Ajouter un Produit</button>
     <button type="button" onclick="afficherFormulaire('afficher')"><i class='bx bx-list-ul'></i> Voir les Produits</button>
+    <button type="button" onclick="showCategoryManagement()"><i class="bx bx-category"></i> Gérer les Catégories</button>
     <button type="button" onclick="showHiddenProducts()"><i class="bx bx-hide"></i> Produits Cachés</button>
     <button type="button" onclick="showLogoutPopup()"><i class="bx bx-log-out"></i> Se déconnecter</button>
   </nav>
   <main class="dashboard" role="main">
+    <!-- Real-time Stats Section -->
+    <section aria-label="Real-time statistics" class="stats-section">
+      <h2 class="section-title">📊 Statistiques en Temps Réel</h2>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon">📦</div>
+          <div class="stat-info">
+            <h3>Total Produits</h3>
+            <p class="stat-value" id="statTotalProducts">0</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">📋</div>
+          <div class="stat-info">
+            <h3>Commandes</h3>
+            <p class="stat-value" id="statTotalOrders">0</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">⚠️</div>
+          <div class="stat-info">
+            <h3>Stock Faible</h3>
+            <p class="stat-value" id="statLowStock">0</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">❌</div>
+          <div class="stat-info">
+            <h3>Rupture Stock</h3>
+            <p class="stat-value" id="statOutOfStock">0</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">🏷️</div>
+          <div class="stat-info">
+            <h3>Total Stock</h3>
+            <p class="stat-value" id="statTotalStock">0</p>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">💰</div>
+          <div class="stat-info">
+            <h3>Valeur Stock</h3>
+            <p class="stat-value" id="statStockValue">0 FCA</p>
+          </div>
+        </div>
+      </div>
+      <button class="btn-refresh" onclick="refreshStats()">🔄 Actualiser</button>
+    </section>
+
     <section aria-label="Summary metrics" class="card-container">
       <article class="card employee">
         <div class="icon">📦</div>
@@ -51,6 +103,15 @@
         <p><span id="accessories">0</span></p>
       </article>
     </section>
+
+    <!-- Recent Orders Section -->
+    <section id="ordersSection" class="orders-section">
+      <h2 class="section-title">🛒 Commandes Récentes</h2>
+      <div id="recentOrdersContainer">
+        <p style="text-align:center;padding:20px;color:var(--text-secondary);">Chargement des commandes...</p>
+      </div>
+    </section>
+
     <section id="addProductSection" style="display:none;">
       <h2 class="section-title">✨ Ajouter un Nouveau Produit</h2>
       <form id="addProductForm" onsubmit="addProduct(event)">
@@ -159,6 +220,47 @@
           <tbody></tbody>
         </table>
       </div>
+</section>
+    <section id="categorySection" style="display:none;">
+      <h2 class="section-title">🏷️ Gérer les Catégories</h2>
+      
+      <!-- Add Category Form -->
+      <div class="category-form-container">
+        <h3>➕ Ajouter une Nouvelle Catégorie</h3>
+        <form id="addCategoryForm" onsubmit="addCategory(event)">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Nom de la Catégorie *</label>
+              <input type="text" id="categoryName" required placeholder="Ex: Sports & Fitness">
+            </div>
+            <div class="form-group">
+              <label>Code Identifiant</label>
+              <input type="text" id="categoryCode" placeholder="Ex: sports (optionnel)">
+              <small style="color:var(--text-secondary);">Laissez vide pour générer automatiquement</small>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <textarea id="categoryDescription" rows="2" placeholder="Description de la catégorie..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>URL de l'Image (optionnel)</label>
+            <input type="url" id="categoryImage" placeholder="https://exemple.com/image.jpg">
+          </div>
+          <div class="form-buttons">
+            <button type="submit" class="btn-primary">➕ Ajouter la Catégorie</button>
+            <button type="button" class="btn-secondary" onclick="document.getElementById('addCategoryForm').reset()">🗑️ Réinitialiser</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Categories List -->
+      <div class="categories-list-container">
+        <h3>📋 Catégories Existantes</h3>
+        <div id="categoriesList">
+          <p style="text-align:center;padding:20px;color:var(--text-secondary);">Chargement des catégories...</p>
+        </div>
+      </div>
     </section>
   </main>
   <div id="editModal" style="display:none;">
@@ -243,9 +345,12 @@
     </div>
   </div>
   <div id="messageBox" style="display:none;"></div>
-  <script src="products.js"></script>
+
   <script>
+    // API Configuration - Using absolute path
+    const API_URL = '/Application%20de%20boutique%20en%20ligne%20/api.php';
     let products = [];
+    let orders = [];
     const tbody = document.querySelector("#dataTable tbody");
     const hiddenProductsSection = document.getElementById("hiddenProductsSection");
     const hiddenTableBody = document.querySelector("#hiddenDataTable tbody");
@@ -253,43 +358,308 @@
     const addProductSection = document.getElementById("addProductSection");
     const searchInput = document.getElementById("searchInput");
 
-    function toggleTheme() {
+    // ===== INITIALIZE =====
+    async function init() {
+      loadTheme();
+      await loadProductsFromDatabase();
+      await loadOrders();
+      await loadCategoriesForProducts(); // Load categories for product dropdowns
+      updateAllCounters();
+      
+      // Listen for stats updates from other tabs
+      window.addEventListener('storage', (e) => {
+        if (e.key === 'adminProductStats') {
+          updateAllCounters();
+        }
+      });
+      
+      // Also listen for custom events
+      window.addEventListener('adminStatsUpdate', (e) => {
+        updateAllCounters();
+      });
+    }
+
+    // ===== LOAD PRODUCTS FROM DATABASE =====
+async function loadProductsFromDatabase() {
+      try {
+        const response = await fetch(`${API_URL}?action=getProducts`);
+        const result = await response.json();
+
+        // Helper function to decode HTML entities
+        function decodeEntities(html) {
+          if (!html) return html;
+          const txt = document.createElement('textarea');
+          txt.innerHTML = html;
+          return txt.value;
+        }
+
+        if (result.success && result.data) {
+          products = result.data.map(p => ({
+            id: p.id,
+            name: decodeEntities(p.name),
+            description: decodeEntities(p.description || p.desc),
+            price: p.price,
+            old_price: p.oldPrice || p.old_price,
+            category: p.category,
+            image: decodeEntities(p.image),
+            rating: p.rating,
+            stock: p.stock,
+            badge: decodeEntities(p.badge),
+            is_featured: p.isFeatured || p.is_featured,
+            is_hidden: false
+          }));
+
+          // Cache locally
+          localStorage.setItem('cachedProducts', JSON.stringify(products));
+          console.log('✅ Products loaded from database:', products.length);
+        }
+      } catch (e) {
+        console.error('Database error:', e);
+        // Try cache
+        const cached = localStorage.getItem('cachedProducts');
+        if (cached) {
+          products = JSON.parse(cached);
+          console.log('Products loaded from cache');
+        }
+      }
+    }
+
+    // ===== LOAD ORDERS =====
+    async function loadOrders() {
+      try {
+        // Get orders from localStorage (created by index.html)
+        orders = JSON.parse(localStorage.getItem('orders')) || [];
+        renderRecentOrders();
+      } catch (e) {
+        console.error('Error loading orders:', e);
+        orders = [];
+      }
+    }
+
+    // ===== REFRESH STATS =====
+    async function refreshStats() {
+      await loadProductsFromDatabase();
+      await loadOrders();
+      updateAllCounters();
+      showMessage('🔄 Statistiques actualisées!', 'success');
+    }
+
+    // ===== LOAD STATS FROM DATABASE =====
+    async function loadStatsFromDatabase() {
+      try {
+        const response = await fetch(`${API_URL}?action=getStats`);
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+          const stats = result.data;
+          
+          // Update real-time stats from database
+          document.getElementById('statTotalProducts').textContent = stats.totalProducts || 0;
+          document.getElementById('statLowStock').textContent = stats.lowStock || 0;
+          document.getElementById('statOutOfStock').textContent = stats.outOfStock || 0;
+          document.getElementById('statTotalStock').textContent = (stats.totalStock || 0).toLocaleString('fr-FR');
+          document.getElementById('statStockValue').textContent = (stats.stockValue || 0).toLocaleString('fr-FR') + ' FCA';
+          
+// Update category counters from database
+          if (stats.byCategory && stats.byCategory.length > 0) {
+            stats.byCategory.forEach(cat => {
+              const count = cat.count || 0;
+              switch(cat.category) {
+                case 'tech': document.getElementById("tech").textContent = count; break;
+                case 'beauty': document.getElementById("beauty").textContent = count; break;
+                case 'goods': document.getElementById("goods").textContent = count; break;
+                case 'fashion': document.getElementById("fashion").textContent = count; break;
+                case 'accessories': document.getElementById("accessories").textContent = count; break;
+              }
+            });
+          }
+          
+          // Update total
+          document.getElementById("total").textContent = stats.totalProducts || 0;
+          
+          return stats;
+        }
+      } catch (e) {
+        console.warn('Failed to load stats from database:', e);
+      }
+      return null;
+    }
+
+    // ===== UPDATE ALL COUNTERS =====
+    function updateAllCounters() {
+      // First try to load stats directly from database for accurate data
+      loadStatsFromDatabase();
+      
+      // Also calculate from local data as fallback
+      const stats = {
+        totalProducts: products.length,
+        tech: products.filter(p => p.category === 'tech').length,
+        beauty: products.filter(p => p.category === 'beauty').length,
+        goods: products.filter(p => p.category === 'goods').length,
+        fashion: products.filter(p => p.category === 'fashion').length,
+        accessories: products.filter(p => p.category === 'accessories').length,
+        totalStock: products.reduce((sum, p) => sum + (p.stock || 0), 0),
+        lowStock: products.filter(p => p.stock > 0 && p.stock < 10).length,
+        outOfStock: products.filter(p => !p.stock || p.stock === 0).length,
+        totalOrders: orders.length
+      };
+      
+      // Update category counters
+      document.getElementById("total").textContent = products.filter(p => !p.is_hidden).length;
+      document.getElementById("tech").textContent = products.filter(p => p.category === 'tech' && !p.is_hidden).length;
+      document.getElementById("beauty").textContent = products.filter(p => p.category === 'beauty' && !p.is_hidden).length;
+      document.getElementById("goods").textContent = products.filter(p => p.category === 'goods' && !p.is_hidden).length;
+      document.getElementById("fashion").textContent = products.filter(p => p.category === 'fashion' && !p.is_hidden).length;
+      document.getElementById("accessories").textContent = products.filter(p => p.category === 'accessories' && !p.is_hidden).length;
+    }
+
+    // ===== RENDER RECENT ORDERS =====
+    function renderRecentOrders() {
+      const container = document.getElementById('recentOrdersContainer');
+      
+      if (orders.length === 0) {
+        container.innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-secondary);">Aucune commande pour le moment</p>';
+        return;
+      }
+      
+      // Sort by date (newest first)
+      const sortedOrders = [...orders].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10);
+      
+      container.innerHTML = `
+        <table class="orders-table">
+          <thead>
+            <tr>
+              <th># Commande</th>
+              <th>Date</th>
+              <th>Articles</th>
+              <th>Total</th>
+              <th>Paiement</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sortedOrders.map(order => `
+              <tr>
+                <td><strong>#${order.id}</strong></td>
+                <td>${new Date(order.date).toLocaleDateString('fr-FR')}</td>
+                <td>${order.items ? order.items.length : 0} produit(s)</td>
+                <td><strong>${(order.total || 0).toLocaleString('fr-FR')} FCA</strong></td>
+                <td>${getPaymentMethodLabel(order.method)}</td>
+                <td><span class="status-badge status-${order.status}">${getStatusLabel(order.status)}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function getPaymentMethodLabel(method) {
+      const labels = {
+        'orange-money': '💫 Orange Money',
+        'mtn-mobile': '📱 MTN Mobile',
+        'bank-transfer': '🏦 Virement',
+        'cash-delivery': '💵 Livraison'
+      };
+      return labels[method] || method;
+    }
+
+    function getStatusLabel(status) {
+      const labels = {
+        'confirmed': 'Confirmée',
+        'processing': 'En cours',
+        'shipped': 'Expédiée',
+        'delivered': 'Livrée',
+        'cancelled': 'Annulée'
+      };
+      return labels[status] || status;
+    }
+
+    // ===== DATABASE OPERATIONS =====
+    async function updateStockInDatabase(productId, newStock) {
+      try {
+        const response = await fetch(`${API_URL}?action=updateStock`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: productId, stock: newStock })
+        });
+        const result = await response.json();
+        return result.success;
+      } catch (e) {
+        console.error('Failed to update stock:', e);
+        return false;
+      }
+    }
+
+    async function updateProductInDatabase(productId, productData) {
+      try {
+        const response = await fetch(`${API_URL}?action=updateProduct`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: productId, ...productData })
+        });
+        const result = await response.json();
+        return result.success;
+      } catch (e) {
+        console.error('Failed to update product:', e);
+        return false;
+      }
+    }
+
+    async function addProductToDatabase(productData) {
+      try {
+        const response = await fetch(`${API_URL}?action=addProduct`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(productData)
+        });
+        const result = await response.json();
+        return result.success;
+      } catch (e) {
+        console.error('Failed to add product:', e);
+        return false;
+      }
+    }
+
+    async function deleteProductFromDatabase(productId) {
+      try {
+        const response = await fetch(`${API_URL}?action=deleteProduct&id=${productId}`, {
+          method: 'DELETE'
+        });
+        const result = await response.json();
+        return result.success;
+      } catch (e) {
+        console.error('Failed to delete product:', e);
+        return false;
+      }
+    }
+
+function toggleTheme() {
       const html = document.documentElement;
       const icon = document.getElementById('themeIcon');
       const text = document.getElementById('themeText');
       if (html.getAttribute('data-theme') === 'dark') {
         html.setAttribute('data-theme', 'light');
-        icon.textContent = '🌙';
-        text.textContent = 'Mode Sombre';
+        if (icon) icon.textContent = '🌙';
+        if (text) text.textContent = 'Mode Sombre';
         localStorage.setItem('theme', 'light');
       } else {
         html.setAttribute('data-theme', 'dark');
-        icon.textContent = '☀️';
-        text.textContent = 'Mode Clair';
+        if (icon) icon.textContent = '☀️';
+        if (text) text.textContent = 'Mode Clair';
         localStorage.setItem('theme', 'dark');
       }
     }
 
-    function loadTheme() {
+function loadTheme() {
       const savedTheme = localStorage.getItem('theme');
+      const themeIcon = document.getElementById('themeIcon');
+      const themeText = document.getElementById('themeText');
       if (savedTheme === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
-        document.getElementById('themeIcon').textContent = '☀️';
-        document.getElementById('themeText').textContent = 'Mode Clair';
+        if (themeIcon) themeIcon.textContent = '☀️';
+        if (themeText) themeText.textContent = 'Mode Clair';
       }
     }
-
-    function loadFromProductsJS() {
-      if (typeof productsData !== 'undefined') {
-        products = productsData.map(p => ({ id: p.id, name: p.name, description: p.desc, price: p.price, old_price: p.oldPrice, category: p.category, image: p.image, rating: p.rating, stock: p.stock, badge: p.badge, is_featured: p.isFeatured, is_hidden: false }));
-      } else {
-        const saved = localStorage.getItem("products");
-        if (saved) products = JSON.parse(saved);
-      }
-      updateCounters(products);
-    }
-
-    function init() { loadTheme(); loadFromProductsJS(); }
 
     function showAddProductForm() { 
       addProductSection.style.display = 'block'; 
@@ -299,10 +669,10 @@
     }
     function hideAddProductForm() { addProductSection.style.display = 'none'; }
 
-    function addProduct(event) {
+    async function addProduct(event) {
       event.preventDefault();
+      
       const newProduct = {
-        id: products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1,
         name: document.getElementById('productName').value,
         description: document.getElementById('productDescription').value,
         price: parseFloat(document.getElementById('productPrice').value),
@@ -312,18 +682,38 @@
         rating: parseFloat(document.getElementById('productRating').value) || 0,
         image: document.getElementById('productImage').value || 'https://via.placeholder.com/150',
         badge: document.getElementById('productBadge').value || null,
-        is_featured: document.getElementById('productFeatured').value === '1',
-        is_hidden: false
+        is_featured: document.getElementById('productFeatured').value === '1'
       };
-      products.push(newProduct);
-      localStorage.setItem("products", JSON.stringify(products));
-      showMessage('✅ Produit ajouté avec succès!', 'success');
+      
+      // Try to save to database first
+      const savedToDB = await addProductToDatabase(newProduct);
+      
+      if (savedToDB) {
+        // Reload products from database to get the correct ID
+        await loadProductsFromDatabase();
+        showMessage('✅ Produit ajouté dans la base de données!', 'success');
+      } else {
+        // Fallback to local array if database fails
+        newProduct.id = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
+        newProduct.is_hidden = false;
+        products.push(newProduct);
+        showMessage('✅ Produit ajouté (mode local)!', 'success');
+      }
+      
+      // Notify other tabs
+      localStorage.setItem('adminProductStats', Date.now());
+      window.dispatchEvent(new Event('adminStatsUpdate'));
+      
       document.getElementById('addProductForm').reset();
-      updateCounters(products);
-      setTimeout(() => { hideAddProductForm(); afficherFormulaire('afficher'); }, 1500);
+      updateAllCounters();
+      
+      setTimeout(() => { 
+        hideAddProductForm(); 
+        afficherFormulaire('afficher'); 
+      }, 1500);
     }
 
-    function editProduct(id) {
+    async function editProduct(id) {
       const product = products.find(p => p.id === id);
       if (!product) return;
       document.getElementById('editProductId').value = id;
@@ -342,17 +732,45 @@
 
     function closeEditModal() { document.getElementById('editModal').style.display = 'none'; }
 
-    function saveProductEdit(event) {
+    async function saveProductEdit(event) {
       event.preventDefault();
       const id = parseInt(document.getElementById('editProductId').value);
       const index = products.findIndex(p => p.id === id);
+      
       if (index !== -1) {
-        products[index] = { ...products[index], name: document.getElementById('editName').value, category: document.getElementById('editCategory').value, description: document.getElementById('editDescription').value, price: parseFloat(document.getElementById('editPrice').value), old_price: parseFloat(document.getElementById('editOldPrice').value) || null, stock: parseInt(document.getElementById('editStock').value), rating: parseFloat(document.getElementById('editRating').value) || 0, image: document.getElementById('editImage').value, badge: document.getElementById('editBadge').value || null, is_featured: document.getElementById('editFeatured').value === '1' };
-        localStorage.setItem("products", JSON.stringify(products));
-        showMessage('✅ Produit modifié avec succès!', 'success');
+        const updatedProduct = { 
+          name: document.getElementById('editName').value, 
+          category: document.getElementById('editCategory').value, 
+          description: document.getElementById('editDescription').value, 
+          price: parseFloat(document.getElementById('editPrice').value), 
+          old_price: parseFloat(document.getElementById('editOldPrice').value) || null, 
+          stock: parseInt(document.getElementById('editStock').value), 
+          rating: parseFloat(document.getElementById('editRating').value) || 0, 
+          image: document.getElementById('editImage').value, 
+          badge: document.getElementById('editBadge').value || null, 
+          is_featured: document.getElementById('editFeatured').value === '1',
+          in_stock: parseInt(document.getElementById('editStock').value) > 0 ? 1 : 0
+        };
+        
+        // Update local array first
+        products[index] = { ...products[index], ...updatedProduct };
+        
+        // Update in database
+        const updated = await updateProductInDatabase(id, updatedProduct);
+        
+        if (updated) {
+          showMessage('✅ Produit modifié dans la base de données!', 'success');
+        } else {
+          showMessage('✅ Produit modifié (mode local)!', 'success');
+        }
+        
         closeEditModal();
         displayProducts(products);
-        updateCounters(products);
+        updateAllCounters();
+        
+        // Notify other tabs
+        localStorage.setItem('adminProductStats', Date.now());
+        window.dispatchEvent(new Event('adminStatsUpdate'));
       }
     }
 
@@ -360,20 +778,32 @@
       const index = products.findIndex(p => p.id === id);
       if (index !== -1) {
         products[index].is_hidden = !products[index].is_hidden;
-        localStorage.setItem("products", JSON.stringify(products));
         showMessage(products[index].is_hidden ? '👁️ Produit caché!' : '✅ Produit affiché!', 'success');
         displayProducts(products);
-        updateCounters(products);
+        updateAllCounters();
       }
     }
 
     function deleteProduct(productId) {
       if (confirm("Êtes-vous sûr de vouloir supprimer ce produit?")) {
-        products = products.filter(p => p.id != productId);
-        localStorage.setItem("products", JSON.stringify(products));
-        displayProducts(products.filter(p => !p.is_hidden));
-        updateCounters(products);
-        showMessage('🗑️ Produit supprimé!', 'success');
+        // Try to delete from database first
+        deleteProductFromDatabase(productId).then(async (deleted) => {
+          if (deleted) {
+            // Reload from database
+            await loadProductsFromDatabase();
+            showMessage('🗑️ Produit supprimé de la base de données!', 'success');
+          } else {
+            // Fallback to local delete
+            products = products.filter(p => p.id != productId);
+            showMessage('🗑️ Produit supprimé (mode local)!', 'success');
+          }
+          displayProducts(products.filter(p => !p.is_hidden));
+          updateAllCounters();
+          
+          // Notify other tabs
+          localStorage.setItem('adminProductStats', Date.now());
+          window.dispatchEvent(new Event('adminStatsUpdate'));
+        });
       }
     }
 
@@ -404,22 +834,30 @@
       const index = products.findIndex(p => p.id === id);
       if (index !== -1) {
         products[index].is_hidden = false;
-        localStorage.setItem("products", JSON.stringify(products));
         showMessage('✅ Produit affiché!', 'success');
         displayHiddenProducts();
-        updateCounters(products);
+        updateAllCounters();
       }
     }
 
-    function displayProducts(productsToDisplay) {
+function displayProducts(productsToDisplay) {
       tbody.innerHTML = "";
       const visibleProducts = productsToDisplay.filter(p => !p.is_hidden);
       if (visibleProducts.length === 0) { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-secondary);">Aucun produit</td></tr>'; return; }
+      
+      // Helper function to decode HTML entities
+      function decodeHTML(html) {
+        const txt = document.createElement('textarea');
+        txt.innerHTML = html;
+        return txt.value;
+      }
+      
       visibleProducts.forEach(product => {
         const price = typeof product.price === 'number' ? product.price.toLocaleString('fr-FR') + ' FCA' : product.price;
         const oldPrice = product.old_price ? product.old_price.toLocaleString('fr-FR') + ' FCA' : '-';
+        const stockClass = product.stock === 0 ? 'out-of-stock' : (product.stock < 10 ? 'low-stock' : 'in-stock');
         const row = document.createElement("tr");
-        row.innerHTML = '<td>'+product.id+'</td><td><img src="'+product.image+'" alt="'+product.name+'" onerror="this.src=\'https://via.placeholder.com/50\'"></td><td>'+product.name+'</td><td style="font-weight:bold;">'+price+'</td><td><span style="text-decoration:line-through;color:var(--text-secondary);font-size:12px;">'+oldPrice+'</span></td><td>'+getCategoryLabel(product.category)+'</td><td>'+product.stock+'</td><td>⭐ '+(product.rating || '-')+'</td><td><button class="btn-edit" onclick="editProduct('+product.id+')">✏️</button><button class="btn-hide" onclick="toggleProductVisibility('+product.id+')">'+(product.is_hidden ? '👁️' : '👁️‍🗨️')+'</button><button class="btn-delete" onclick="deleteProduct('+product.id+')">🗑️</button></td>';
+        row.innerHTML = '<td>'+product.id+'</td><td><img src="'+decodeHTML(product.image)+'" alt="'+decodeHTML(product.name)+'" onerror="this.src=\'https://via.placeholder.com/50\'"></td><td>'+decodeHTML(product.name)+'</td><td style="font-weight:bold;">'+price+'</td><td><span style="text-decoration:line-through;color:var(--text-secondary);font-size:12px;">'+oldPrice+'</span></td><td>'+getCategoryLabel(product.category)+'</td><td class="'+stockClass+'">'+product.stock+'</td><td>⭐ '+(product.rating || '-')+'</td><td><button class="btn-edit" onclick="editProduct('+product.id+')">✏️</button><button class="btn-hide" onclick="toggleProductVisibility('+product.id+')">'+(product.is_hidden ? '👁️' : '👁️‍🗨️')+'</button><button class="btn-delete" onclick="deleteProduct('+product.id+')">🗑️</button></td>';
         tbody.appendChild(row);
       });
     }
@@ -427,7 +865,7 @@
     function getCategoryLabel(category) { const labels = { 'tech': '📱 Tech', 'beauty': '💄 Beauté', 'goods': '🏠 Maison', 'fashion': '👔 Mode', 'accessories': '⌚ Accessoires' }; return labels[category] || category; }
 
     function updateCounters(productsArr) {
-      if (!productsArr) productsArr = [];
+      if (!productsArr) productsArr = products;
       document.getElementById("total").textContent = productsArr.filter(p => !p.is_hidden).length;
       document.getElementById("tech").textContent = productsArr.filter(p => p.category === 'tech' && !p.is_hidden).length;
       document.getElementById("beauty").textContent = productsArr.filter(p => p.category === 'beauty' && !p.is_hidden).length;
@@ -459,6 +897,166 @@
       messageBox.className = 'message-box ' + type; 
       messageBox.style.display = 'block'; 
       setTimeout(() => messageBox.style.display = 'none', 3000); 
+    }
+
+    // ===== CATEGORY MANAGEMENT =====
+    let categories = [];
+    const categorySection = document.getElementById("categorySection");
+    const categoriesList = document.getElementById("categoriesList");
+
+    async function showCategoryManagement() {
+      addProductSection.style.display = 'none';
+      productsSection.style.display = 'none';
+      hiddenProductsSection.style.display = 'none';
+      categorySection.style.display = 'block';
+      await loadCategories();
+      categorySection.scrollIntoView({ behavior: "smooth" });
+    }
+
+    async function loadCategories() {
+      try {
+        const response = await fetch(`${API_URL}?action=getCategories`);
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+          categories = result.data;
+          renderCategories();
+        }
+      } catch (e) {
+        console.error('Error loading categories:', e);
+        categoriesList.innerHTML = '<p style="text-align:center;padding:20px;color:var(--error);">Erreur lors du chargement des catégories</p>';
+      }
+    }
+
+    function renderCategories() {
+      if (categories.length === 0) {
+        categoriesList.innerHTML = '<p style="text-align:center;padding:20px;color:var(--text-secondary);">Aucune catégorie trouvée</p>';
+        return;
+      }
+
+      categoriesList.innerHTML = `
+        <div class="categories-grid">
+          ${categories.map(cat => `
+            <div class="category-card">
+              <div class="category-info">
+                <h4>${cat.name}</h4>
+                <p class="category-code">${cat.name_en || ''}</p>
+                <p class="category-desc">${cat.description || 'Aucune description'}</p>
+              </div>
+              <div class="category-actions">
+                <button class="btn-delete" onclick="deleteCategory(${cat.id})" title="Supprimer">
+                  🗑️ Supprimer
+                </button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    async function addCategory(event) {
+      event.preventDefault();
+      
+      const name = document.getElementById('categoryName').value.trim();
+      let nameEn = document.getElementById('categoryCode').value.trim();
+      
+      // Auto-generate name_en if not provided
+      if (!nameEn) {
+        nameEn = name.toLowerCase()
+          .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]/g, '_')
+          .replace(/_+/g, '_')
+          .replace(/^_|_$/g, '');
+      }
+      
+      const description = document.getElementById('categoryDescription').value.trim();
+      const image = document.getElementById('categoryImage').value.trim();
+
+      try {
+        const response = await fetch(`${API_URL}?action=addCategory`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: name,
+            name_en: nameEn,
+            description: description,
+            image: image
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showMessage('✅ Catégorie ajoutée avec succès!', 'success');
+          document.getElementById('addCategoryForm').reset();
+          await loadCategories();
+          // Update product dropdowns with new categories
+          await loadCategoriesForProducts();
+        } else {
+          showMessage('❌ ' + (result.message || 'Erreur lors de l\'ajout'), 'error');
+        }
+      } catch (e) {
+        console.error('Error adding category:', e);
+        showMessage('❌ Erreur lors de l\'ajout de la catégorie', 'error');
+      }
+    }
+
+    async function deleteCategory(categoryId) {
+      if (!confirm('Êtes-vous sûr de vouloir supprimer cette catégorie?')) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}?action=deleteCategory&id=${categoryId}`, {
+          method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          showMessage('✅ Catégorie supprimée avec succès!', 'success');
+          await loadCategories();
+        } else {
+          showMessage('❌ ' + (result.message || 'Erreur lors de la suppression'), 'error');
+        }
+      } catch (e) {
+        console.error('Error deleting category:', e);
+        showMessage('❌ Erreur lors de la suppression', 'error');
+      }
+    }
+
+    async function loadCategoriesForProducts() {
+      // Load categories for product form dropdowns
+      try {
+        const response = await fetch(`${API_URL}?action=getCategories`);
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+          const categorySelects = [
+            document.getElementById('productCategory'),
+            document.getElementById('editCategory')
+          ];
+          
+          categorySelects.forEach(select => {
+            if (select) {
+              // Keep first option (placeholder)
+              const firstOption = select.options[0];
+              select.innerHTML = '';
+              select.appendChild(firstOption);
+              
+              // Add categories
+              result.data.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat.name_en || cat.id;
+                option.textContent = `🏷️ ${cat.name}`;
+                select.appendChild(option);
+              });
+            }
+          });
+        }
+      } catch (e) {
+        console.error('Error loading categories for products:', e);
+      }
     }
     
     function showLogoutPopup() { document.getElementById("modalOverlay").style.display = "flex"; }

@@ -56,6 +56,18 @@ try {
         ");
         
         $pdo->exec("
+            CREATE TABLE IF NOT EXISTS users (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                email VARCHAR(255) NOT NULL UNIQUE,
+                phone VARCHAR(20),
+                password VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )
+        ");
+        
+        $pdo->exec("
             CREATE TABLE IF NOT EXISTS products (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 name VARCHAR(255) NOT NULL,
@@ -408,7 +420,151 @@ case 'deleteCategory':
         ]);
         break;
         
+    case 'register':
+        // Register new user
+        $data = json_decode(file_get_contents('php://input'), true);
+        
+        if (!isset($data['name']) || empty($data['name'])) {
+            respond(false, 'Name is required');
+        }
+        if (!isset($data['email']) || empty($data['email'])) {
+            respond(false, 'Email is required');
+        }
+        if (!isset($data['password']) || empty($data['password'])) {
+            respond(false, 'Password is required');
+        }
+        
+        $name = trim($data['name']);
+        $email = trim($data['email']);
+        $phone = isset($data['phone']) ? trim($data['phone']) : '';
+        $password = password_hash($data['password'], PASSWORD_DEFAULT);
+        
+        // Check if email already exists
+        $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
+        $stmt->execute([$email]);
+        
+        if ($stmt->fetch()) {
+            respond(false, 'Email already registered');
+        }
+        
+        // Insert new user
+        $stmt = $pdo->prepare("INSERT INTO users (name, email, phone, password) VALUES (?, ?, ?, ?)");
+        $stmt->execute([$name, $email, $phone, $password]);
+        
+        $userId = $pdo->lastInsertId();
+        
+        respond(true, 'Registration successful', [
+            'id' => $userId,
+            'name' => $name,
+            'email' => $email
+        ]);
+        break;
+        
+    case 'login':
+        // Login user
+        $data = json_decode(file_get_contents('php://input'), true);
+        
+        if (!isset($data['email']) || empty($data['email'])) {
+            respond(false, 'Email is required');
+        }
+        if (!isset($data['password']) || empty($data['password'])) {
+            respond(false, 'Password is required');
+        }
+        
+        $email = trim($data['email']);
+        $password = $data['password'];
+        
+        // Find user by email
+        $stmt = $pdo->prepare("SELECT * FROM users WHERE email = ?");
+        $stmt->execute([$email]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$user || !password_verify($password, $user['password'])) {
+            respond(false, 'Invalid email or password');
+        }
+        
+        // Return user data without password
+        unset($user['password']);
+        respond(true, 'Login successful', $user);
+        break;
+        
+    case 'getUser':
+        // Get user by ID
+        $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+        
+        if ($id <= 0) {
+            respond(false, 'Invalid user ID');
+        }
+        
+        $stmt = $pdo->prepare("SELECT id, name, email, phone, created_at FROM users WHERE id = ?");
+        $stmt->execute([$id]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$user) {
+            respond(false, 'User not found');
+        }
+        
+        respond(true, 'User retrieved successfully', $user);
+        break;
+        
+    case 'addProduct':
+        // Add new product
+        $data = json_decode(file_get_contents('php://input'), true);
+        
+        if (!isset($data['name']) || empty($data['name'])) {
+            respond(false, 'Product name is required');
+        }
+        if (!isset($data['price']) || empty($data['price'])) {
+            respond(false, 'Product price is required');
+        }
+        if (!isset($data['category']) || empty($data['category'])) {
+            respond(false, 'Product category is required');
+        }
+        
+        $name = trim($data['name']);
+        $description = isset($data['description']) ? trim($data['description']) : '';
+        $price = (float)$data['price'];
+        $oldPrice = isset($data['old_price']) ? (float)$data['old_price'] : null;
+        $category = trim($data['category']);
+        $stock = isset($data['stock']) ? (int)$data['stock'] : 0;
+        $rating = isset($data['rating']) ? (float)$data['rating'] : 0;
+        $image = isset($data['image']) ? trim($data['image']) : 'https://via.placeholder.com/150';
+        $badge = isset($data['badge']) ? trim($data['badge']) : null;
+        $isFeatured = isset($data['is_featured']) ? (int)$data['is_featured'] : 0;
+        $inStock = $stock > 0 ? 1 : 0;
+        
+        // Get category_id from categories table
+        $stmt = $pdo->prepare("SELECT id FROM categories WHERE name_en = ? OR name = ?");
+        $stmt->execute([$category, $category]);
+        $categoryRow = $stmt->fetch(PDO::FETCH_ASSOC);
+        $categoryId = $categoryRow ? $categoryRow['id'] : null;
+        
+        $stmt = $pdo->prepare("
+            INSERT INTO products (name, description, price, old_price, category_id, category, image, rating, stock, in_stock, badge, is_featured, is_new, free_shipping) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
+        ");
+        $stmt->execute([$name, $description, $price, $oldPrice, $categoryId, $category, $image, $rating, $stock, $inStock, $badge, $isFeatured]);
+        
+        $productId = $pdo->lastInsertId();
+        
+        respond(true, 'Product added successfully', ['id' => $productId, 'name' => $name]);
+        break;
+        
+    case 'deleteProduct':
+        // Delete product
+        $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+        
+        if ($id <= 0) {
+            respond(false, 'Invalid product ID');
+        }
+        
+        $stmt = $pdo->prepare("DELETE FROM products WHERE id = ?");
+        $stmt->execute([$id]);
+        
+        respond(true, 'Product deleted successfully');
+        break;
+        
     default:
-        respond(false, 'Invalid action. Available actions: getProducts, getProduct, updateStock, updateProduct, getStats, search, getCategories, addCategory, deleteCategory, reduceStock');
+        respond(false, 'Invalid action. Available actions: getProducts, getProduct, updateStock, updateProduct, getStats, search, getCategories, addCategory, deleteCategory, reduceStock, register, login, getUser');
 }
 

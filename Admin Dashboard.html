@@ -71,6 +71,15 @@
       <button class="btn-refresh" onclick="refreshStats()">🔄 Actualiser</button>
     </section>
 
+    <!-- Category Grid Section -->
+    <section aria-label="Category statistics" class="category-grid-section" id="categoryGridSection">
+      <h2 class="section-title">🏷️ Catégories & Produits</h2>
+      <div class="category-grid" id="categoryGrid">
+        <!-- Categories will be dynamically loaded here -->
+        <p style="text-align:center;padding:20px;color:var(--text-secondary);">Chargement des catégories...</p>
+      </div>
+    </section>
+
     <section aria-label="Summary metrics" class="card-container">
       <article class="card employee">
         <div class="icon">📦</div>
@@ -449,17 +458,22 @@ async function loadProductsFromDatabase() {
       try {
         const response = await fetch(`${API_URL}?action=getStats`);
         const result = await response.json();
-        
+
         if (result.success && result.data) {
           const stats = result.data;
-          
+
           // Update real-time stats from database
           document.getElementById('statTotalProducts').textContent = stats.totalProducts || 0;
           document.getElementById('statLowStock').textContent = stats.lowStock || 0;
           document.getElementById('statOutOfStock').textContent = stats.outOfStock || 0;
           document.getElementById('statTotalStock').textContent = (stats.totalStock || 0).toLocaleString('fr-FR');
-          document.getElementById('statStockValue').textContent = (stats.stockValue || 0).toLocaleString('fr-FR') + ' FCA';
-          
+          // Fix: API returns totalStockValue, map to stockValue
+          document.getElementById('statStockValue').textContent = (stats.totalStockValue || 0).toLocaleString('fr-FR') + ' FCA';
+
+          // Update total orders from local storage (orders are stored by the main app)
+          const storedOrders = JSON.parse(localStorage.getItem('orders') || '[]');
+          document.getElementById('statTotalOrders').textContent = storedOrders.length || 0;
+
 // Update category counters from database
           if (stats.byCategory && stats.byCategory.length > 0) {
             stats.byCategory.forEach(cat => {
@@ -473,10 +487,10 @@ async function loadProductsFromDatabase() {
               }
             });
           }
-          
+
           // Update total
           document.getElementById("total").textContent = stats.totalProducts || 0;
-          
+
           return stats;
         }
       } catch (e) {
@@ -489,7 +503,7 @@ async function loadProductsFromDatabase() {
     function updateAllCounters() {
       // First try to load stats directly from database for accurate data
       loadStatsFromDatabase();
-      
+
       // Also calculate from local data as fallback
       const stats = {
         totalProducts: products.length,
@@ -503,7 +517,18 @@ async function loadProductsFromDatabase() {
         outOfStock: products.filter(p => !p.stock || p.stock === 0).length,
         totalOrders: orders.length
       };
+
+      // Update main stat cards
+      document.getElementById("statTotalProducts").textContent = products.filter(p => !p.is_hidden).length;
+      document.getElementById("statTotalOrders").textContent = orders.length || 0;
+      document.getElementById("statLowStock").textContent = products.filter(p => p.stock > 0 && p.stock < 10 && !p.is_hidden).length;
+      document.getElementById("statOutOfStock").textContent = products.filter(p => !p.stock || p.stock === 0 && !p.is_hidden).length;
+      document.getElementById("statTotalStock").textContent = products.filter(p => !p.is_hidden).reduce((sum, p) => sum + (p.stock || 0), 0).toLocaleString('fr-FR');
       
+      // Calculate stock value
+      const stockValue = products.filter(p => !p.is_hidden).reduce((sum, p) => sum + ((p.price || 0) * (p.stock || 0)), 0);
+      document.getElementById("statStockValue").textContent = stockValue.toLocaleString('fr-FR') + ' FCA';
+
       // Update category counters
       document.getElementById("total").textContent = products.filter(p => !p.is_hidden).length;
       document.getElementById("tech").textContent = products.filter(p => p.category === 'tech' && !p.is_hidden).length;
@@ -511,6 +536,84 @@ async function loadProductsFromDatabase() {
       document.getElementById("goods").textContent = products.filter(p => p.category === 'goods' && !p.is_hidden).length;
       document.getElementById("fashion").textContent = products.filter(p => p.category === 'fashion' && !p.is_hidden).length;
       document.getElementById("accessories").textContent = products.filter(p => p.category === 'accessories' && !p.is_hidden).length;
+
+      // Also update the category grid
+      renderCategoryGrid();
+    }
+
+    // ===== RENDER CATEGORY GRID WITH COUNTS =====
+    function renderCategoryGrid() {
+      const categoryGrid = document.getElementById('categoryGrid');
+      if (!categoryGrid) return;
+
+      // Get unique categories from products
+      const categoryMap = new Map();
+      
+      products.filter(p => !p.is_hidden).forEach(product => {
+        const cat = product.category || 'other';
+        if (!categoryMap.has(cat)) {
+          categoryMap.set(cat, { count: 0, name: cat });
+        }
+        categoryMap.get(cat).count++;
+      });
+
+      // Category display names and icons
+      const categoryInfo = {
+        'tech': { name: 'Tech & Gadgets', icon: '📱' },
+        'beauty': { name: 'Beauté & Soins', icon: '💄' },
+        'goods': { name: 'Maison & Décoration', icon: '🏠' },
+        'fashion': { name: 'Mode & Vêtements', icon: '👔' },
+        'accessories': { name: 'Accessoires', icon: '⌚' },
+        'other': { name: 'Autres', icon: '📦' }
+      };
+
+      if (categoryMap.size === 0) {
+        categoryGrid.innerHTML = `
+          <div class="category-grid-card add-new" onclick="showCategoryManagement()">
+            <span class="category-grid-icon">➕</span>
+            <span class="category-grid-name">Ajouter une catégorie</span>
+          </div>
+        `;
+        return;
+      }
+
+      let html = '';
+      categoryMap.forEach((data, key) => {
+        const info = categoryInfo[key] || categoryInfo.other;
+        html += `
+          <div class="category-grid-card" onclick="filterByCategoryGrid('${key}')">
+            <span class="category-grid-icon">${info.icon}</span>
+            <span class="category-grid-name">${info.name}</span>
+            <span class="category-grid-count">${data.count}</span>
+            <span class="category-grid-label">produit${data.count !== 1 ? 's' : ''}</span>
+          </div>
+        `;
+      });
+
+      // Add "add new" card
+      html += `
+        <div class="category-grid-card add-new" onclick="showCategoryManagement()">
+          <span class="category-grid-icon">➕</span>
+          <span class="category-grid-name">Ajouter</span>
+        </div>
+      `;
+
+      categoryGrid.innerHTML = html;
+    }
+
+    // Filter products by category from grid click
+    function filterByCategoryGrid(category) {
+      addProductSection.style.display = 'none';
+      productsSection.style.display = 'block';
+      searchInput.value = '';
+      
+      const filtered = products.filter(p => !p.is_hidden && p.category === category);
+      displayProducts(filtered);
+      
+      // Show message
+      showMessage(`📂 Affichage: ${category}`, 'success');
+      
+      productsSection.scrollIntoView({ behavior: 'smooth' });
     }
 
     // ===== RENDER RECENT ORDERS =====
